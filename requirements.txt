@@ -1,0 +1,8 @@
+python-telegram-bot>=21.6,<22
+anthropic>=0.39
+pydantic>=2.11
+pydantic-settings>=2.6
+python-dotenv>=1.0
+
+# dev
+pytest>=8.3

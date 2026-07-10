@@ -1,0 +1,36 @@
+# --- Secrets & local config (PUBLIC REPO: never commit these) ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+secrets/
+
+# --- Local data / state ---
+*.sqlite
+*.sqlite3
+*.db
+data/
+*.log
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Editors / OS ---
+.idea/
+.vscode/
+.DS_Store
