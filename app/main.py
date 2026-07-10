@@ -28,7 +28,7 @@ logging.basicConfig(
 # httpx logs the full request URL, which contains the bot token — quiet it so the
 # token never lands in logs.
 logging.getLogger("httpx").setLevel(logging.WARNING)
-log = logging.getLogger("secretary")
+log = logging.getLogger("clera")
 
 # Updates we need Telegram to deliver. business_* are opt-in.
 ALLOWED_UPDATES = [
@@ -59,7 +59,7 @@ def build_application():
     app.add_handler(CommandHandler("help", control.start))
     app.add_handler(CallbackQueryHandler(control.on_decision, pattern=r"^(send|discard):"))
 
-    # Secretary core: business connection + incoming business messages.
+    # Clera core: business connection + incoming business messages.
     app.add_handler(
         MessageHandler(filters.UpdateType.BUSINESS_MESSAGE, business.on_business_message)
     )
@@ -92,7 +92,7 @@ def main() -> None:
         asyncio.set_event_loop(asyncio.new_event_loop())
 
     app = build_application()
-    log.info("Secretary bot starting (draft-first mode). Polling for updates…")
+    log.info("Clera starting (draft-first mode). Polling for updates…")
     app.run_polling(allowed_updates=ALLOWED_UPDATES)
 
 

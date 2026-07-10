@@ -53,7 +53,7 @@ Watch the logs. On connection you should see:
 INFO ... Business connection enabled: <id> (owner <your_id>)
 ```
 
-and a "✅ Secretary connected" message in your control chat.
+and a "✅ Clera connected" message in your control chat.
 
 ## 5. Trigger a draft
 

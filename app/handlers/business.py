@@ -61,7 +61,7 @@ async def on_business_connection(update: Update, context: ContextTypes.DEFAULT_T
         await context.bot.send_message(
             chat_id=_control_chat(conn.owner_user_id),
             text=(
-                "✅ Secretary connected.\n"
+                "✅ Clera connected.\n"
                 "I'll draft replies for your chats. Reply mode: draft-first "
                 "(I never send without your tap)."
             ),

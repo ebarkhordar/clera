@@ -53,7 +53,7 @@ async def _check_token() -> tuple[bool, str]:
 
 
 async def main() -> int:
-    print("── Secretary pre-flight ──")
+    print("── Clera pre-flight ──")
 
     token_ok, token_msg = await _check_token()
     print(_line(token_ok, token_msg))

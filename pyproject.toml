@@ -1,7 +1,7 @@
 [project]
-name = "my-telegram-secretary"
+name = "clera"
 version = "0.1.0"
-description = "Turnkey personal secretary bots for Telegram (open-core MVP)"
+description = "Clera — a personal secretary bot that reads your chats and drafts replies in your voice (open-core MVP)"
 requires-python = ">=3.12"
 
 [tool.ruff]

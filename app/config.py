@@ -27,7 +27,7 @@ class Settings(BaseSettings):
 
     # Storage
     store_backend: str = "sqlite"  # "sqlite" | "memory"
-    sqlite_path: str = "data/secretary.db"
+    sqlite_path: str = "data/clera.db"
 
     # Memory
     history_limit: int = 20  # messages of thread history included in a draft

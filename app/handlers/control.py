@@ -20,7 +20,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.effective_message is None:
         return
     await update.effective_message.reply_text(
-        "👋 This is your Secretary control chat.\n\n"
+        "👋 This is your Clera control chat.\n\n"
         "When a contact messages you, I'll draft a reply here and you tap "
         "*✅ Send* to deliver it as you. Nothing goes out without your approval.\n\n"
         "To go live, enable me as a chatbot in Telegram Settings → Business → "
