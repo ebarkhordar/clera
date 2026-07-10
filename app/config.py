@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     # 0 disables the check.
     stale_after_seconds: int = 300
 
+    # Local voice-note transcription (mlx-whisper model, fetched from HF on
+    # first use). large-v3-turbo is fast on Apple Silicon and strong on Persian.
+    whisper_model: str = "mlx-community/whisper-large-v3-turbo"
+
     # LLM providers
     # "auto" picks: Anthropic API if a key is set, else the Claude CLI if
     # installed, else a safe placeholder. Force one with "anthropic" or "cli".

@@ -55,6 +55,10 @@ def register_secretary_handlers(app) -> None:
     app.add_handler(CommandHandler("start", control.start))
     app.add_handler(CommandHandler("help", control.start))
     app.add_handler(CallbackQueryHandler(control.on_decision, pattern=r"^(send|discard):"))
+    # Voice notes sent/forwarded to the control chat → transcript (recovery tool).
+    app.add_handler(
+        MessageHandler(filters.VOICE & ~filters.UpdateType.BUSINESS_MESSAGES, control.on_voice)
+    )
 
     # Clera core: business connection + incoming business messages.
     app.add_handler(

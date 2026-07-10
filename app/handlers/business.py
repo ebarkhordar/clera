@@ -10,7 +10,10 @@ Replies are sent with ``business_connection_id`` so they go out AS THE OWNER.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
+import os
+import tempfile
 import time
 
 from telegram import (
@@ -81,7 +84,16 @@ async def on_business_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     replied to. Only messages *from the contact* produce a draft.
     """
     msg = update.business_message
-    if msg is None or not msg.text:
+    if msg is None:
+        return
+    text = msg.text
+    if not text and msg.voice is not None:
+        transcript = await _voice_to_text(context, msg)
+        if transcript is None:
+            log.warning("Voice message in chat %s could not be transcribed", msg.chat.id)
+            return
+        text = f"[voice] {transcript}"
+    if not text:
         return
 
     bc_id = msg.business_connection_id
@@ -112,7 +124,7 @@ async def on_business_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         chat_id=chat_id,
         direction="out" if from_owner else "in",
         sender_id=sender_id,
-        text=msg.text,
+        text=text,
         ts=ts,
     )
     contact_name = None if from_owner else (msg.from_user.first_name if msg.from_user else None)
@@ -149,7 +161,7 @@ async def on_business_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     store.record_spend(bc_id, result.cost_usd)
 
     if outcome.decision is Decision.AUTO_SEND:
-        await _handle_auto(context, conn, chat_id, msg, result, ts)
+        await _handle_auto(context, conn, chat_id, msg, text, result, ts)
         await _maybe_refresh_profile(conn, chat_id, contact)
         return
 
@@ -161,7 +173,7 @@ async def on_business_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     if result.action == "notify":
         await context.bot.send_message(
             chat_id=_control_chat(conn.owner_user_id),
-            text=f"👋 *A contact needs you:*\n{msg.text}\n\n_{result.text}_",
+            text=f"👋 *A contact needs you:*\n{text}\n\n_{result.text}_",
             parse_mode="Markdown",
         )
         return
@@ -169,7 +181,7 @@ async def on_business_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     draft = store.create_draft(
         business_connection_id=bc_id,
         target_chat_id=chat_id,
-        incoming_text=msg.text,
+        incoming_text=text,
         proposed_text=result.text,
         cost_usd=result.cost_usd,
     )
@@ -185,7 +197,7 @@ async def on_business_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     await context.bot.send_message(
         chat_id=_control_chat(conn.owner_user_id),
         text=(
-            f"✉️ *New message from a contact:*\n{msg.text}\n\n"
+            f"✉️ *New message from a contact:*\n{text}\n\n"
             f"🤖 *Proposed reply* (~${result.cost_usd:.4f}, {result.model}){demo}:\n"
             f"{result.text}"
         ),
@@ -201,8 +213,25 @@ async def on_business_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     await _maybe_refresh_profile(conn, chat_id, contact)
 
 
+async def _voice_to_text(context, msg) -> str | None:
+    """Download a Telegram voice note and transcribe it locally. None on failure."""
+    from app.agent import transcribe
+
+    if not transcribe.available():
+        return None
+    tg_file = await context.bot.get_file(msg.voice.file_id)
+    fd, path = tempfile.mkstemp(suffix=".oga")
+    os.close(fd)
+    try:
+        await tg_file.download_to_drive(custom_path=path)
+        return await asyncio.to_thread(transcribe.transcribe, path)
+    finally:
+        with contextlib.suppress(OSError):
+            os.unlink(path)
+
+
 async def _handle_auto(
-    context, conn: Connection, chat_id: int, msg, result: DraftResult, ts: int
+    context, conn: Connection, chat_id: int, msg, incoming_text: str, result: DraftResult, ts: int
 ) -> None:
     """Fully automatic mode: act on the agent's reply/silent/notify decision."""
     bc_id = conn.business_connection_id
@@ -223,7 +252,7 @@ async def _handle_auto(
         )
         await context.bot.send_message(
             chat_id=control,
-            text=f"👋 *{contact_label} needs you:*\n{msg.text}\n\n_{note}_",
+            text=f"👋 *{contact_label} needs you:*\n{incoming_text}\n\n_{note}_",
             parse_mode="Markdown",
         )
         log.info("Escalated message on %s chat %s to owner", bc_id, chat_id)
@@ -253,7 +282,7 @@ async def _handle_auto(
     if settings.notify_auto_replies:
         await context.bot.send_message(
             chat_id=control,
-            text=f"↩️ *{contact_label}:* {msg.text}\n*Me:* {result.text}",
+            text=f"↩️ *{contact_label}:* {incoming_text}\n*Me:* {result.text}",
             parse_mode="Markdown",
         )
 

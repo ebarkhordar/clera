@@ -4,5 +4,10 @@ pydantic>=2.11
 pydantic-settings>=2.6
 python-dotenv>=1.0
 
+# voice-note transcription (local; mlx-whisper targets Apple Silicon)
+mlx-whisper>=0.4
+soundfile>=0.12
+scipy>=1.11
+
 # dev
 pytest>=8.3

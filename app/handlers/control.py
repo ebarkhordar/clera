@@ -31,6 +31,25 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
+async def on_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """A voice note sent/forwarded to the control chat → reply with its transcript.
+
+    Recovery tool: lets the owner transcribe a contact's voice note the bot
+    missed (or any audio) by forwarding it here.
+    """
+    msg = update.effective_message
+    if msg is None or msg.voice is None:
+        return
+    from app.handlers.business import _voice_to_text
+
+    await msg.reply_text("🎙 Transcribing…")
+    transcript = await _voice_to_text(context, msg)
+    if transcript is None:
+        await msg.reply_text("⚠️ Could not transcribe that voice note.")
+        return
+    await msg.reply_text(f"🎙 Transcript:\n{transcript}")
+
+
 async def on_decision(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle the ✅ Send / 🗑 Discard inline buttons."""
     query = update.callback_query
