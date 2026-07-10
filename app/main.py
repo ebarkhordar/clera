@@ -41,8 +41,19 @@ ALLOWED_UPDATES = [
 
 
 async def on_error(update: object, context) -> None:
-    """Log any unhandled exception from a handler instead of dropping a raw trace."""
-    log.error("Unhandled handler error", exc_info=context.error)
+    """Log any unhandled exception from a handler instead of dropping a raw trace.
+
+    Transient network drops (poll timeouts, mid-read disconnects) are routine on
+    a long-running poller and self-heal via PTB's retry — warn without the
+    traceback so real failures stand out in the log.
+    """
+    from telegram.error import NetworkError, TimedOut
+
+    err = context.error
+    if isinstance(err, (NetworkError, TimedOut)):
+        log.warning("Transient network error (auto-retrying): %s", err)
+        return
+    log.error("Unhandled handler error", exc_info=err)
 
 
 def register_secretary_handlers(app) -> None:
