@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 
 from telegram import (
     InlineKeyboardButton,
@@ -21,7 +22,7 @@ from telegram.ext import ContextTypes
 
 from app.agent.secretary import DraftResult, draft_reply, summarize_contact
 from app.config import settings
-from app.policy.policy import Decision, decide
+from app.policy.policy import Decision, decide, is_stale
 from app.store import repo as store
 from app.store.models import Connection, Contact
 
@@ -124,6 +125,12 @@ async def on_business_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     # From the contact → consider drafting a reply.
+    # Backlog catch-up guard: updates queued while the bot was offline arrive
+    # late; the owner has usually handled those already. History only, no reply.
+    if is_stale(ts, int(time.time()), settings.stale_after_seconds):
+        log.info("Message on %s chat %s is stale (backlog); recorded, not replying", bc_id, chat_id)
+        return
+
     local_hour = msg.date.hour if msg.date else 12
     outcome = decide(conn, sender_id, local_hour)
     if outcome.decision is Decision.IGNORE:

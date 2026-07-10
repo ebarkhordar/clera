@@ -32,6 +32,19 @@ class PolicyOutcome:
     reason: str
 
 
+def is_stale(message_ts: int, now_ts: int, max_age_s: int) -> bool:
+    """True when a message is too old to answer (e.g. from a queued backlog).
+
+    Telegram re-delivers updates that arrived while the bot was offline. The
+    owner has usually already handled those chats themselves, so replying late
+    would talk over a conversation that moved on — record them for history, but
+    never answer. A zero/unknown timestamp is treated as fresh.
+    """
+    if max_age_s <= 0 or message_ts <= 0:
+        return False
+    return now_ts - message_ts > max_age_s
+
+
 def decide(conn: Connection, sender_user_id: int | None, local_hour: int) -> PolicyOutcome:
     if not conn.is_enabled:
         return PolicyOutcome(Decision.IGNORE, "connection disabled")

@@ -50,3 +50,13 @@ def test_empty_allowlist_handles_everyone():
 def test_review_mode_routes_to_draft():
     c = conn(auto_send=False)
     assert decide(c, 7, 12).decision is Decision.DRAFT
+
+
+def test_stale_backlog_messages_are_not_answered():
+    from app.policy.policy import is_stale
+
+    now = 1_000_000
+    assert is_stale(now - 301, now, max_age_s=300) is True
+    assert is_stale(now - 30, now, max_age_s=300) is False
+    assert is_stale(0, now, max_age_s=300) is False  # unknown timestamp = fresh
+    assert is_stale(now - 9999, now, max_age_s=0) is False  # 0 disables the check

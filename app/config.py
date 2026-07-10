@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     # they can see what the secretary is doing (visibility without approval).
     notify_auto_replies: bool = True
 
+    # Never answer messages older than this (seconds) — queued backlog from
+    # while the bot was offline is recorded as history but not replied to.
+    # 0 disables the check.
+    stale_after_seconds: int = 300
+
     # LLM providers
     # "auto" picks: Anthropic API if a key is set, else the Claude CLI if
     # installed, else a safe placeholder. Force one with "anthropic" or "cli".
