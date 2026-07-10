@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     history_limit: int = 20  # messages of thread history included in a draft
     profile_refresh_every: int = 6  # rebuild a contact's profile every N messages
 
+    # Collect-only mode: record every message (voice notes transcribed locally)
+    # into history, but never call the LLM and never draft, reply, or escalate.
+    # For building up per-contact memory before turning the secretary on.
+    collect_only: bool = False
+
     # Automatic mode: echo each auto-sent reply to the owner's control chat so
     # they can see what the secretary is doing (visibility without approval).
     notify_auto_replies: bool = True

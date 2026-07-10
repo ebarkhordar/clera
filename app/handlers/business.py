@@ -130,6 +130,11 @@ async def on_business_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     contact_name = None if from_owner else (msg.from_user.first_name if msg.from_user else None)
     contact = store.bump_contact(bc_id, chat_id, name=contact_name, ts=ts)
 
+    if settings.collect_only:
+        # Memory-building mode: store everything, act on nothing, no LLM calls.
+        log.info("Collect-only: recorded message on %s chat %s", bc_id, chat_id)
+        return
+
     if from_owner:
         # The owner typed this themselves — learn from it, never reply to it.
         log.info("Recorded owner message on %s chat %s (not drafting)", bc_id, chat_id)
