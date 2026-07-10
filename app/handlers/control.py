@@ -21,8 +21,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     await update.effective_message.reply_text(
         "👋 This is your Clera control chat.\n\n"
-        "When a contact messages you, I'll draft a reply here and you tap "
-        "*✅ Send* to deliver it as you. Nothing goes out without your approval.\n\n"
+        "I answer your chats *automatically*, in your voice, using our full "
+        "conversation history with each contact. When a message needs you "
+        "personally — money, commitments, things only you know — I don't "
+        "reply; I ping you here instead.\n\n"
         "To go live, enable me as a chatbot in Telegram Settings → Business → "
         "Chatbots.",
         parse_mode="Markdown",

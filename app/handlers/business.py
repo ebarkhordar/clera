@@ -19,7 +19,7 @@ from telegram import (
 )
 from telegram.ext import ContextTypes
 
-from app.agent.secretary import draft_reply, summarize_contact
+from app.agent.secretary import DraftResult, draft_reply, summarize_contact
 from app.config import settings
 from app.policy.policy import Decision, decide
 from app.store import repo as store
@@ -62,9 +62,11 @@ async def on_business_connection(update: Update, context: ContextTypes.DEFAULT_T
             chat_id=_control_chat(conn.owner_user_id),
             text=(
                 "✅ Clera connected.\n"
-                "I'll draft replies for your chats. Reply mode: draft-first "
-                "(I never send without your tap)."
+                "I'll answer your chats automatically, in your voice. When a "
+                "message needs *you* (money, commitments, things I don't know), "
+                "I'll ping you here instead of replying."
             ),
+            parse_mode="Markdown",
         )
     else:
         store.disable_connection(bc.id)
@@ -140,24 +142,23 @@ async def on_business_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     store.record_spend(bc_id, result.cost_usd)
 
     if outcome.decision is Decision.AUTO_SEND:
-        sent = await context.bot.send_message(
-            chat_id=chat_id,
-            text=result.text,
-            business_connection_id=bc_id,
-        )
-        store.record_message(
-            business_connection_id=bc_id,
-            chat_id=chat_id,
-            direction="out",
-            sender_id=conn.owner_user_id,
-            text=result.text,
-            ts=int(sent.date.timestamp()) if sent.date else ts,
-        )
-        log.info("Auto-sent reply on %s (cost $%.4f)", bc_id, result.cost_usd)
+        await _handle_auto(context, conn, chat_id, msg, result, ts)
         await _maybe_refresh_profile(conn, chat_id, contact)
         return
 
-    # DRAFT: post to the owner's control chat for approval.
+    # DRAFT (opt-in review mode): post to the owner's control chat for approval.
+    # Silent/notify decisions apply here too — there is nothing to approve.
+    if result.action == "silent":
+        log.info("Agent stayed silent on %s chat %s (review mode)", bc_id, chat_id)
+        return
+    if result.action == "notify":
+        await context.bot.send_message(
+            chat_id=_control_chat(conn.owner_user_id),
+            text=f"👋 *A contact needs you:*\n{msg.text}\n\n_{result.text}_",
+            parse_mode="Markdown",
+        )
+        return
+
     draft = store.create_draft(
         business_connection_id=bc_id,
         target_chat_id=chat_id,
@@ -193,8 +194,65 @@ async def on_business_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     await _maybe_refresh_profile(conn, chat_id, contact)
 
 
+async def _handle_auto(
+    context, conn: Connection, chat_id: int, msg, result: DraftResult, ts: int
+) -> None:
+    """Fully automatic mode: act on the agent's reply/silent/notify decision."""
+    bc_id = conn.business_connection_id
+    contact_label = (msg.from_user.first_name if msg.from_user else None) or "a contact"
+    control = _control_chat(conn.owner_user_id)
+
+    if result.action == "silent":
+        log.info("Agent stayed silent on %s chat %s", bc_id, chat_id)
+        return
+
+    # A placeholder completion (no LLM configured) must never be sent as the
+    # owner — surface it to them instead.
+    if result.action == "notify" or result.placeholder:
+        note = (
+            result.text
+            if result.action == "notify"
+            else "no LLM is configured (set ANTHROPIC_API_KEY), so I can't reply for you."
+        )
+        await context.bot.send_message(
+            chat_id=control,
+            text=f"👋 *{contact_label} needs you:*\n{msg.text}\n\n_{note}_",
+            parse_mode="Markdown",
+        )
+        log.info("Escalated message on %s chat %s to owner", bc_id, chat_id)
+        return
+
+    # The owner may have answered while we were generating — never talk over them.
+    latest = store.recent_messages(bc_id, chat_id, 1)
+    if latest and latest[-1].direction == "out":
+        log.info("Owner replied on %s chat %s while drafting; staying silent", bc_id, chat_id)
+        return
+
+    sent = await context.bot.send_message(
+        chat_id=chat_id,
+        text=result.text,
+        business_connection_id=bc_id,
+    )
+    store.record_message(
+        business_connection_id=bc_id,
+        chat_id=chat_id,
+        direction="out",
+        sender_id=conn.owner_user_id,
+        text=result.text,
+        ts=int(sent.date.timestamp()) if sent.date else ts,
+    )
+    log.info("Auto-replied on %s chat %s (cost $%.4f)", bc_id, chat_id, result.cost_usd)
+
+    if settings.notify_auto_replies:
+        await context.bot.send_message(
+            chat_id=control,
+            text=f"↩️ *{contact_label}:* {msg.text}\n*Me:* {result.text}",
+            parse_mode="Markdown",
+        )
+
+
 def _control_chat(owner_user_id: int) -> int:
-    """Where approvals go: configured control chat, else the owner's own chat."""
+    """Where escalations and activity notes go: configured chat, else the owner's own."""
     return settings.control_chat_id or owner_user_id
 
 

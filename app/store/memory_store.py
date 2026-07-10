@@ -11,7 +11,7 @@ import itertools
 import threading
 
 from app.config import settings
-from app.store.models import Connection, Contact, Draft, Message, Settings
+from app.store.models import Connection, Contact, Draft, ManagedBot, Message, Settings
 
 _draft_counter = itertools.count(1)
 _lock = threading.Lock()
@@ -20,6 +20,7 @@ _connections: dict[str, Connection] = {}
 _drafts: dict[str, Draft] = {}
 _messages: list[Message] = []
 _contacts: dict[tuple[str, int], Contact] = {}
+_managed_bots: dict[int, ManagedBot] = {}
 
 
 # --- Connections -----------------------------------------------------------
@@ -125,6 +126,46 @@ def recent_messages(business_connection_id: str, chat_id: int, limit: int) -> li
         if m.business_connection_id == business_connection_id and m.chat_id == chat_id
     ]
     return thread[-limit:]
+
+
+# --- Managed bots (per-client secretary bots we operate) -------------------
+def upsert_managed_bot(
+    bot_user_id: int,
+    owner_user_id: int,
+    token: str,
+    username: str | None,
+    created_at: int,
+) -> ManagedBot:
+    with _lock:
+        existing = _managed_bots.get(bot_user_id)
+        bot = ManagedBot(
+            bot_user_id=bot_user_id,
+            owner_user_id=owner_user_id,
+            token=token,
+            username=username or (existing.username if existing else None),
+            status="active",
+            created_at=existing.created_at if existing else created_at,
+        )
+        _managed_bots[bot_user_id] = bot
+        return bot
+
+
+def get_managed_bot(bot_user_id: int) -> ManagedBot | None:
+    return _managed_bots.get(bot_user_id)
+
+
+def list_managed_bots(active_only: bool = True) -> list[ManagedBot]:
+    bots = list(_managed_bots.values())
+    if active_only:
+        bots = [b for b in bots if b.status == "active"]
+    return bots
+
+
+def set_managed_bot_status(bot_user_id: int, status: str) -> None:
+    with _lock:
+        bot = _managed_bots.get(bot_user_id)
+        if bot:
+            bot.status = status
 
 
 # --- Contacts (durable per-thread memory) ----------------------------------

@@ -4,6 +4,13 @@ Internal context for contributors: what this project is aiming to be, why it is
 built the way it is, and where it is going. User-facing setup lives in the
 [README](../README.md).
 
+> **Direction update (2026-07):** the product is now a *fully automatic*
+> secretary (no draft approval; the agent replies, stays silent, or escalates
+> to the owner) delivered as a hosted platform built on managed bots and
+> pay-per-usage Stars billing. [PLATFORM.md](PLATFORM.md) is the source of
+> truth for that direction and the backlog; sections below are updated where
+> they conflicted.
+
 ## Vision
 
 Make it trivial for a non-technical person to have their own Telegram secretary —
@@ -55,12 +62,20 @@ Design intent:
 
 ## Safety posture
 
-Replying as a real person is high-stakes, so defaults are deliberately
-conservative and should not be loosened without discussion:
+Replying as a real person is high-stakes. The product is fully automatic, so
+safety lives in the *agent's decision protocol* rather than human approval:
 
-- **Draft-first everywhere.** A reply is only sent after the owner taps approve.
-- **Allowlist + active hours** gate what the agent will act on.
-- **Auto-send** is opt-in and limited to allowlisted contacts.
+- **Reply / silent / notify.** For every message the agent either replies,
+  stays silent, or escalates to the owner (`[SILENT]` / `[NOTIFY]` markers,
+  parsed in `app/agent/secretary.py`). Money, commitments, and unknown facts
+  are always escalated, never guessed.
+- **Placeholder output is never auto-sent** — with no LLM configured the
+  message is escalated to the owner instead.
+- **Never talk over the owner**: if the owner replied while a response was
+  being generated, it is dropped.
+- **Allowlist + active hours** gate which chats the agent engages at all.
+- **Review mode** (draft + approve) remains as an opt-in per connection
+  (`auto_send = false`), no longer the default.
 - The system prompt forbids inventing facts, commitments, times, prices, or
   agreeing to payments/contracts.
 
@@ -116,11 +131,10 @@ estimate and does not track balances or gate on credit.
 
 ## Roadmap
 
+Moved to the backlog in [PLATFORM.md](PLATFORM.md). Done so far:
+
 - [x] Persistent storage — SQLite (Postgres next)
 - [x] Per-contact memory — thread history + owner-voice capture + durable profiles
-- [ ] Managed-bot provisioning (one-tap onboarding)
-- [ ] Additional LLM providers (e.g. OpenAI)
-- [ ] Per-connection settings UI (tone, tier, hours, allowlist, auto-send)
-- [ ] Web dashboard
-- [ ] Data retention / deletion controls (privacy)
-- [ ] Prepaid billing (deferred)
+- [x] Automatic replies with reply/silent/notify decisions (approval now opt-in)
+- [x] Managed-bot provisioning (`managed_bot` update → `getManagedBotToken`)
+- [x] Multi-bot runtime — `python -m app.platform`, polling (webhook gateway next)

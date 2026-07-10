@@ -45,16 +45,13 @@ async def on_error(update: object, context) -> None:
     log.error("Unhandled handler error", exc_info=context.error)
 
 
-def build_application():
-    if not settings.telegram_bot_token:
-        raise SystemExit(
-            "TELEGRAM_BOT_TOKEN is not set. Copy .env.example to .env and add a "
-            "bot token from @BotFather."
-        )
+def register_secretary_handlers(app) -> None:
+    """Wire the secretary handlers onto an Application (any bot token).
 
-    app = ApplicationBuilder().token(settings.telegram_bot_token).build()
-
-    # Control chat: commands + draft approval buttons.
+    Used both by single-bot dev mode (this module) and by the platform runtime
+    (app/platform.py), which runs one such Application per managed bot.
+    """
+    # Control chat: commands + draft approval buttons (review mode).
     app.add_handler(CommandHandler("start", control.start))
     app.add_handler(CommandHandler("help", control.start))
     app.add_handler(CallbackQueryHandler(control.on_decision, pattern=r"^(send|discard):"))
@@ -79,6 +76,17 @@ def build_application():
         app.add_handler(TypeHandler(Update, _raw))
 
     app.add_error_handler(on_error)
+
+
+def build_application():
+    if not settings.telegram_bot_token:
+        raise SystemExit(
+            "TELEGRAM_BOT_TOKEN is not set. Copy .env.example to .env and add a "
+            "bot token from @BotFather."
+        )
+
+    app = ApplicationBuilder().token(settings.telegram_bot_token).build()
+    register_secretary_handlers(app)
     return app
 
 

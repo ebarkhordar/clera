@@ -14,7 +14,7 @@ import sqlite3
 import threading
 
 from app.config import settings
-from app.store.models import Connection, Contact, Draft, Message, Settings
+from app.store.models import Connection, Contact, Draft, ManagedBot, Message, Settings
 
 _lock = threading.Lock()
 _conn: sqlite3.Connection | None = None
@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS connections (
     spent_usd              REAL    NOT NULL DEFAULT 0,
     tone                   TEXT    NOT NULL,
     tier                   TEXT    NOT NULL,
-    auto_send              INTEGER NOT NULL DEFAULT 0,
+    auto_send              INTEGER NOT NULL DEFAULT 1,
     active_start           INTEGER NOT NULL DEFAULT 0,
     active_end             INTEGER NOT NULL DEFAULT 24,
     allowlist              TEXT    NOT NULL DEFAULT '[]'
@@ -55,6 +55,17 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 CREATE INDEX IF NOT EXISTS idx_messages_thread
     ON messages (business_connection_id, chat_id, id);
+
+-- Per-client secretary bots we operate (tokens from getManagedBotToken).
+-- TODO before hosting real users: encrypt tokens at rest.
+CREATE TABLE IF NOT EXISTS managed_bots (
+    bot_user_id            INTEGER PRIMARY KEY,
+    owner_user_id          INTEGER NOT NULL,
+    token                  TEXT    NOT NULL,
+    username               TEXT,
+    status                 TEXT    NOT NULL DEFAULT 'active',
+    created_at             INTEGER NOT NULL DEFAULT 0
+);
 
 CREATE TABLE IF NOT EXISTS contacts (
     business_connection_id TEXT    NOT NULL,
@@ -140,16 +151,18 @@ def upsert_connection(
             (business_connection_id,),
         ).fetchone()
         if exists is None:
+            defaults = Settings()
             conn.execute(
                 "INSERT INTO connections "
-                "(business_connection_id, owner_user_id, can_reply, is_enabled, tone, tier) "
-                "VALUES (?, ?, ?, 1, ?, ?)",
+                "(business_connection_id, owner_user_id, can_reply, is_enabled, tone, tier, "
+                "auto_send) VALUES (?, ?, ?, 1, ?, ?, ?)",
                 (
                     business_connection_id,
                     owner_user_id,
                     int(can_reply),
-                    Settings().tone,
+                    defaults.tone,
                     settings.default_tier,
+                    int(defaults.auto_send),
                 ),
             )
         else:
@@ -281,6 +294,64 @@ def recent_messages(business_connection_id: str, chat_id: int, limit: int) -> li
         )
         for r in rows
     ]
+
+
+# --- Managed bots (per-client secretary bots we operate) -------------------
+def _row_to_managed_bot(row: sqlite3.Row) -> ManagedBot:
+    return ManagedBot(
+        bot_user_id=row["bot_user_id"],
+        owner_user_id=row["owner_user_id"],
+        token=row["token"],
+        username=row["username"],
+        status=row["status"],
+        created_at=row["created_at"],
+    )
+
+
+def upsert_managed_bot(
+    bot_user_id: int,
+    owner_user_id: int,
+    token: str,
+    username: str | None,
+    created_at: int,
+) -> ManagedBot:
+    with _lock:
+        conn = _c()
+        conn.execute(
+            "INSERT INTO managed_bots (bot_user_id, owner_user_id, token, username, "
+            "status, created_at) VALUES (?, ?, ?, ?, 'active', ?) "
+            "ON CONFLICT(bot_user_id) DO UPDATE SET owner_user_id = excluded.owner_user_id, "
+            "token = excluded.token, username = COALESCE(excluded.username, username), "
+            "status = 'active'",
+            (bot_user_id, owner_user_id, token, username, created_at),
+        )
+        conn.commit()
+    got = get_managed_bot(bot_user_id)
+    assert got is not None
+    return got
+
+
+def get_managed_bot(bot_user_id: int) -> ManagedBot | None:
+    row = (
+        _c().execute("SELECT * FROM managed_bots WHERE bot_user_id = ?", (bot_user_id,)).fetchone()
+    )
+    return _row_to_managed_bot(row) if row else None
+
+
+def list_managed_bots(active_only: bool = True) -> list[ManagedBot]:
+    sql = "SELECT * FROM managed_bots"
+    if active_only:
+        sql += " WHERE status = 'active'"
+    return [_row_to_managed_bot(r) for r in _c().execute(sql).fetchall()]
+
+
+def set_managed_bot_status(bot_user_id: int, status: str) -> None:
+    with _lock:
+        conn = _c()
+        conn.execute(
+            "UPDATE managed_bots SET status = ? WHERE bot_user_id = ?", (status, bot_user_id)
+        )
+        conn.commit()
 
 
 # --- Contacts (durable per-thread memory) ----------------------------------

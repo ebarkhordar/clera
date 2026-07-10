@@ -1,10 +1,15 @@
 """Policy engine: decide what to do with an incoming business message.
 
-Safety-first defaults for v1: everything becomes a DRAFT for the owner to approve.
-Auto-send is only ever considered when the owner explicitly enabled it AND the
-contact is allowlisted AND we're inside active hours — but the MVP handler still
-routes to draft, keeping a human in the loop. This module centralizes the rules
-so tightening/loosening them is one place.
+The product is a fully automatic secretary, so the default decision is
+AUTO_SEND. Policy only decides *whether the agent engages at all* (connection
+enabled, reply rights, active hours, optional contact allowlist) and which mode
+applies. Whether a given message is actually answered, left alone, or escalated
+to the owner is the *agent's* decision (see ``app.agent.secretary``), made from
+the conversation itself.
+
+DRAFT survives as an opt-in review mode (``auto_send = False``) for owners who
+want to approve everything; it is no longer the default. This module centralizes
+the rules so tightening/loosening them is one place.
 """
 
 from __future__ import annotations
@@ -16,9 +21,9 @@ from app.store.models import Connection
 
 
 class Decision(Enum):
-    DRAFT = "draft"  # propose to owner, wait for approval
-    AUTO_SEND = "auto_send"  # send without approval (opt-in, allowlisted)
-    IGNORE = "ignore"  # do nothing (e.g. outside active hours, no reply rights)
+    AUTO_SEND = "auto_send"  # default: the agent replies as the owner, no approval
+    DRAFT = "draft"  # opt-in review mode: propose to owner, wait for approval
+    IGNORE = "ignore"  # do nothing (disabled, no rights, outside hours, not allowlisted)
 
 
 @dataclass(frozen=True)
@@ -37,8 +42,12 @@ def decide(conn: Connection, sender_user_id: int | None, local_hour: int) -> Pol
     if not (start <= local_hour < end):
         return PolicyOutcome(Decision.IGNORE, "outside active hours")
 
-    allowlisted = sender_user_id is not None and sender_user_id in conn.settings.allowlist
-    if conn.settings.auto_send and allowlisted:
-        return PolicyOutcome(Decision.AUTO_SEND, "auto-send enabled + allowlisted")
+    # A non-empty allowlist restricts which contacts the secretary handles at
+    # all; everyone else stays untouched for the owner to answer personally.
+    if conn.settings.allowlist and sender_user_id not in conn.settings.allowlist:
+        return PolicyOutcome(Decision.IGNORE, "contact not in allowlist")
 
-    return PolicyOutcome(Decision.DRAFT, "default draft-first")
+    if conn.settings.auto_send:
+        return PolicyOutcome(Decision.AUTO_SEND, "automatic secretary (default)")
+
+    return PolicyOutcome(Decision.DRAFT, "review mode enabled by owner")

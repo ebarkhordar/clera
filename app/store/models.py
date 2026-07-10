@@ -15,9 +15,29 @@ class Settings:
 
     tone: str = "friendly and concise"
     tier: str = "fast"  # "best" | "fast"
-    auto_send: bool = False  # v1 default: draft-first, never auto-send
+    # Automatic secretary is the product: replies go out without approval.
+    # False = legacy review mode (every reply becomes a draft to approve).
+    auto_send: bool = True
     active_hours: tuple[int, int] = (0, 24)  # inclusive start, exclusive end (local hour)
-    allowlist: set[int] = field(default_factory=set)  # contact user ids allowed for auto-send
+    # Empty = handle every contact. Non-empty = only handle these user ids;
+    # everyone else is left for the owner to answer personally.
+    allowlist: set[int] = field(default_factory=set)
+
+
+@dataclass
+class ManagedBot:
+    """A per-client secretary bot we provision and operate.
+
+    Created via the manager bot's creation link; owned by the client, operated
+    by us with the token from ``getManagedBotToken``.
+    """
+
+    bot_user_id: int  # the new bot's Telegram user id
+    owner_user_id: int  # the client who owns the bot
+    token: str  # operating token from getManagedBotToken
+    username: str | None = None
+    status: str = "active"  # active | revoked
+    created_at: int = 0  # unix seconds
 
 
 @dataclass

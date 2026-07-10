@@ -25,6 +25,21 @@ class DraftResult:
     model: str
     cost_usd: float
     placeholder: bool
+    # What the agent decided to do with the message (see prompts):
+    #   "reply"  -> text is sent to the contact as the owner
+    #   "silent" -> no reply warranted; text is empty
+    #   "notify" -> owner must handle it personally; text is the note for the owner
+    action: str = "reply"
+
+
+def parse_action(raw: str) -> tuple[str, str]:
+    """Split a completion into (action, text) per the [SILENT]/[NOTIFY] protocol."""
+    text = raw.strip()
+    if text.startswith("[SILENT]"):
+        return "silent", ""
+    if text.startswith("[NOTIFY]"):
+        return "notify", text.removeprefix("[NOTIFY]").strip()
+    return "reply", text
 
 
 def _select_provider() -> Provider:
@@ -73,11 +88,13 @@ def draft_reply(
         user=build_draft_user(transcript),
         model=model,
     )
+    action, text = parse_action(completion.text)
     return DraftResult(
-        text=completion.text,
+        text=text,
         model=completion.model,
         cost_usd=_cost_of(completion),
         placeholder=completion.placeholder,
+        action=action,
     )
 
 
