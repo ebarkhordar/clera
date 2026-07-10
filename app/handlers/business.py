@@ -176,6 +176,7 @@ async def on_business_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             text=f"👋 *A contact needs you:*\n{text}\n\n_{result.text}_",
             parse_mode="Markdown",
         )
+        log.info("Escalated message on %s chat %s to owner (review mode)", bc_id, chat_id)
         return
 
     draft = store.create_draft(
