@@ -52,6 +52,13 @@ def test_review_mode_routes_to_draft():
     assert decide(c, 7, 12).decision is Decision.DRAFT
 
 
+def test_paused_connection_is_ignored():
+    c = conn(paused=True)
+    outcome = decide(c, 7, 12)
+    assert outcome.decision is Decision.IGNORE
+    assert outcome.reason == "paused by owner"
+
+
 def test_stale_backlog_messages_are_not_answered():
     from app.policy.policy import is_stale
 

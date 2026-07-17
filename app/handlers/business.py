@@ -93,6 +93,18 @@ async def on_business_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             log.warning("Voice message in chat %s could not be transcribed", msg.chat.id)
             return
         text = f"[voice] {transcript}"
+    elif not text and msg.photo:
+        # Record photos so the secretary isn't blind to them: description when
+        # vision is available (and we're allowed to call an LLM), caption always.
+        description = None
+        if not settings.collect_only:
+            description = await _photo_to_text(context, msg)
+        parts = ["[photo]"]
+        if description:
+            parts.append(description)
+        if msg.caption:
+            parts.append(f"(caption: {msg.caption})")
+        text = " ".join(parts)
     if not text:
         return
 
@@ -141,6 +153,11 @@ async def on_business_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await _maybe_refresh_profile(conn, chat_id, contact)
         return
 
+    if contact.muted:
+        # Owner ran /mute for this thread: keep the history, never act.
+        log.info("Contact %s is muted; recorded only", chat_id)
+        return
+
     # From the contact → consider drafting a reply.
     # Backlog catch-up guard: updates queued while the bot was offline arrive
     # late; the owner has usually handled those already. History only, no reply.
@@ -170,9 +187,12 @@ async def on_business_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await _maybe_refresh_profile(conn, chat_id, contact)
         return
 
+    contact_label = contact.name or f"chat {chat_id}"
+
     # DRAFT (opt-in review mode): post to the owner's control chat for approval.
     # Silent/notify decisions apply here too — there is nothing to approve.
     if result.action == "silent":
+        store.record_activity(bc_id, chat_id, "silent", f"{contact_label}: {text[:80]}", ts)
         log.info("Agent stayed silent on %s chat %s (review mode)", bc_id, chat_id)
         return
     if result.action == "notify":
@@ -181,6 +201,7 @@ async def on_business_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             text=f"👋 *A contact needs you:*\n{text}\n\n_{result.text}_",
             parse_mode="Markdown",
         )
+        store.record_activity(bc_id, chat_id, "escalated", f"{contact_label}: {text[:80]}", ts)
         log.info("Escalated message on %s chat %s to owner (review mode)", bc_id, chat_id)
         return
 
@@ -210,6 +231,7 @@ async def on_business_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         parse_mode="Markdown",
         reply_markup=keyboard,
     )
+    store.record_activity(bc_id, chat_id, "drafted", f"{contact_label}: {text[:80]}", ts)
     log.info(
         "Drafted reply on %s (draft %s, ~$%.4f, awaiting approval)",
         bc_id,
@@ -236,6 +258,23 @@ async def _voice_to_text(context, msg) -> str | None:
             os.unlink(path)
 
 
+async def _photo_to_text(context, msg) -> str | None:
+    """Download the largest size of a photo and describe it. None if unavailable."""
+    from app.agent import vision
+
+    if not vision.available():
+        return None
+    tg_file = await context.bot.get_file(msg.photo[-1].file_id)
+    fd, path = tempfile.mkstemp(suffix=".jpg")
+    os.close(fd)
+    try:
+        await tg_file.download_to_drive(custom_path=path)
+        return await asyncio.to_thread(vision.describe, path)
+    finally:
+        with contextlib.suppress(OSError):
+            os.unlink(path)
+
+
 async def _handle_auto(
     context, conn: Connection, chat_id: int, msg, incoming_text: str, result: DraftResult, ts: int
 ) -> None:
@@ -245,6 +284,9 @@ async def _handle_auto(
     control = _control_chat(conn.owner_user_id)
 
     if result.action == "silent":
+        store.record_activity(
+            bc_id, chat_id, "silent", f"{contact_label}: {incoming_text[:80]}", ts
+        )
         log.info("Agent stayed silent on %s chat %s", bc_id, chat_id)
         return
 
@@ -260,6 +302,9 @@ async def _handle_auto(
             chat_id=control,
             text=f"👋 *{contact_label} needs you:*\n{incoming_text}\n\n_{note}_",
             parse_mode="Markdown",
+        )
+        store.record_activity(
+            bc_id, chat_id, "escalated", f"{contact_label}: {incoming_text[:80]}", ts
         )
         log.info("Escalated message on %s chat %s to owner", bc_id, chat_id)
         return
@@ -283,6 +328,7 @@ async def _handle_auto(
         text=result.text,
         ts=int(sent.date.timestamp()) if sent.date else ts,
     )
+    store.record_activity(bc_id, chat_id, "replied", f"{contact_label}: {incoming_text[:80]}", ts)
     log.info("Auto-replied on %s chat %s (cost $%.4f)", bc_id, chat_id, result.cost_usd)
 
     if settings.notify_auto_replies:

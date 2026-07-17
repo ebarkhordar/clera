@@ -51,6 +51,10 @@ class Settings(BaseSettings):
     # first use). large-v3-turbo is fast on Apple Silicon and strong on Persian.
     whisper_model: str = "mlx-community/whisper-large-v3-turbo"
 
+    # Hour (local time, 0-23) at which the daily digest is sent to the owner.
+    # Set to -1 to disable the scheduled digest (/digest still works on demand).
+    digest_hour: int = 21
+
     # LLM providers
     # "auto" picks: Anthropic API if a key is set, else the Claude CLI if
     # installed, else a safe placeholder. Force one with "anthropic" or "cli".

@@ -18,6 +18,8 @@ class Settings:
     # Automatic secretary is the product: replies go out without approval.
     # False = legacy review mode (every reply becomes a draft to approve).
     auto_send: bool = True
+    # Owner hit /pause: record everything, act on nothing, until /resume.
+    paused: bool = False
     active_hours: tuple[int, int] = (0, 24)  # inclusive start, exclusive end (local hour)
     # Empty = handle every contact. Non-empty = only handle these user ids;
     # everyone else is left for the owner to answer personally.
@@ -93,3 +95,15 @@ class Contact:
     profile: str = ""  # LLM-maintained summary: who they are, tone, key facts
     message_count: int = 0
     updated_at: int = 0
+    muted: bool = False  # owner ran /mute: record this thread, never act on it
+
+
+@dataclass
+class Activity:
+    """One secretary decision, for /status counts and the daily digest."""
+
+    business_connection_id: str
+    chat_id: int
+    kind: str  # replied | drafted | escalated | silent
+    snippet: str  # short human-readable context ("Narges: asked about…")
+    ts: int

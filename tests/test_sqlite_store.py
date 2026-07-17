@@ -97,3 +97,44 @@ def test_contact_profile_update():
     store.bump_contact("bc1", 100, name="Amir", ts=1)
     store.update_contact_profile("bc1", 100, "friend; casual Persian; buying a phone")
     assert store.get_contact("bc1", 100).profile == "friend; casual Persian; buying a phone"
+
+
+def test_connection_settings_updates_and_owner_lookup():
+    store.upsert_connection("bc1", owner_user_id=42, can_reply=True)
+    assert store.get_connection_by_owner(42).business_connection_id == "bc1"
+    assert store.get_connection_by_owner(999) is None
+
+    store.update_connection_settings("bc1", auto_send=False, paused=True, tier="best")
+    conn = store.get_connection("bc1")
+    assert conn.settings.auto_send is False
+    assert conn.settings.paused is True
+    assert conn.settings.tier == "best"
+
+    assert [c.business_connection_id for c in store.list_connections()] == ["bc1"]
+    store.disable_connection("bc1")
+    assert store.list_connections() == []
+    assert len(store.list_connections(enabled_only=False)) == 1
+
+
+def test_contact_mute_roundtrip():
+    store.bump_contact("bc1", 100, name="Amir", ts=1)
+    store.set_contact_muted("bc1", 100, True)
+    assert store.get_contact("bc1", 100).muted is True
+    assert store.list_contacts("bc1")[0].muted is True
+    store.set_contact_muted("bc1", 100, False)
+    assert store.get_contact("bc1", 100).muted is False
+
+
+def test_activity_log_and_digest_marker():
+    store.upsert_connection("bc1", owner_user_id=42, can_reply=True)
+    store.record_activity("bc1", 100, "replied", "Amir: hey", ts=50)
+    store.record_activity("bc1", 100, "silent", "Amir: ok", ts=60)
+    store.record_activity("bc2", 200, "replied", "other conn", ts=70)
+
+    acts = store.activities_since("bc1", 55)
+    assert [(a.kind, a.snippet) for a in acts] == [("silent", "Amir: ok")]
+    assert len(store.activities_since("bc1", 0)) == 2
+
+    assert store.get_digest_marker("bc1") == ""
+    store.set_digest_marker("bc1", "2026-07-17")
+    assert store.get_digest_marker("bc1") == "2026-07-17"

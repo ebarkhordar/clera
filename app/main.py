@@ -65,6 +65,14 @@ def register_secretary_handlers(app) -> None:
     # Control chat: commands + draft approval buttons (review mode).
     app.add_handler(CommandHandler("start", control.start))
     app.add_handler(CommandHandler("help", control.start))
+    app.add_handler(CommandHandler("status", control.status))
+    app.add_handler(CommandHandler("pause", control.pause))
+    app.add_handler(CommandHandler("resume", control.resume))
+    app.add_handler(CommandHandler("auto", control.auto_mode))
+    app.add_handler(CommandHandler("review", control.review_mode))
+    app.add_handler(CommandHandler("mute", control.mute))
+    app.add_handler(CommandHandler("unmute", control.unmute))
+    app.add_handler(CommandHandler("digest", control.digest_now))
     app.add_handler(CallbackQueryHandler(control.on_decision, pattern=r"^(send|discard):"))
     # Voice notes sent/forwarded to the control chat → transcript (recovery tool).
     app.add_handler(
@@ -93,6 +101,14 @@ def register_secretary_handlers(app) -> None:
     app.add_error_handler(on_error)
 
 
+async def _post_init(app) -> None:
+    """Start background jobs once the event loop is running."""
+    if not settings.collect_only:
+        from app.digest import digest_loop
+
+        app.create_task(digest_loop(app.bot))
+
+
 def build_application():
     if not settings.telegram_bot_token:
         raise SystemExit(
@@ -100,9 +116,34 @@ def build_application():
             "bot token from @BotFather."
         )
 
-    app = ApplicationBuilder().token(settings.telegram_bot_token).build()
+    app = ApplicationBuilder().token(settings.telegram_bot_token).post_init(_post_init).build()
     register_secretary_handlers(app)
     return app
+
+
+def acquire_single_instance_lock():
+    """Refuse to start when another Clera instance is already polling.
+
+    Two pollers on one token fight over getUpdates (Telegram 409 Conflict) and
+    silently split the update stream. The lock file lives next to the database
+    and is released by the OS on any kind of process death.
+    """
+    import fcntl
+    import os
+
+    lock_path = os.path.join(os.path.dirname(settings.sqlite_path) or ".", "clera.lock")
+    os.makedirs(os.path.dirname(lock_path) or ".", exist_ok=True)
+    handle = open(lock_path, "w")  # noqa: SIM115 — held for process lifetime
+    try:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        raise SystemExit(
+            "Another Clera instance is already running (data/clera.lock is held). "
+            "Stop it first — two pollers on one bot token conflict."
+        ) from None
+    handle.write(str(os.getpid()))
+    handle.flush()
+    return handle
 
 
 def main() -> None:
@@ -114,9 +155,14 @@ def main() -> None:
     except RuntimeError:
         asyncio.set_event_loop(asyncio.new_event_loop())
 
+    lock = acquire_single_instance_lock()  # held until exit
     app = build_application()
-    log.info("Clera starting (draft-first mode). Polling for updates…")
-    app.run_polling(allowed_updates=ALLOWED_UPDATES)
+    mode = "collect-only" if settings.collect_only else "secretary"
+    log.info("Clera starting (%s mode). Polling for updates…", mode)
+    try:
+        app.run_polling(allowed_updates=ALLOWED_UPDATES)
+    finally:
+        lock.close()
 
 
 if __name__ == "__main__":

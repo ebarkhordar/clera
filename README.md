@@ -42,20 +42,26 @@ A contact messages you
 
 - **Reads and answers your real chats**, not a separate bot conversation, via
   Telegram Business connections.
-- **Fully automatic** — replies go out without approval; an activity feed in
-  your control chat shows everything the secretary does. (A draft-approval
-  review mode remains available as an opt-in.)
+- **Fully automatic** — for each message the agent replies in your voice,
+  stays silent, or escalates to you (money, commitments, things only you
+  know). A draft-approval review mode remains available as an opt-in.
 - **Per-contact memory** — thread history, an LLM-maintained contact profile,
-  and your own typed messages teach it your voice.
-- **Escalation, not guessing** — messages that need facts, decisions, or money
-  come to you untouched.
+  and your own typed messages teach it your voice. Start in collect-only mode,
+  then `python -m app.backfill` builds profiles from the gathered history.
+- **Hears and sees** — voice notes are transcribed locally (mlx-whisper, no
+  API), photos are described via Claude vision, so the secretary isn't blind
+  to half of a real conversation.
+- **You stay in control from Telegram** — `/status`, `/auto`, `/review`,
+  `/pause`, `/mute <name>`, and a **daily digest** of everything it did.
 - **Managed-bot provisioning** — `python -m app.platform` runs a manager bot
   that creates a personal secretary bot for each client (they own it, we
   operate it) plus a runner per client bot.
+- **Deployable in one command** — Docker, launchd, or systemd recipes
+  ([docs/DEPLOY.md](docs/DEPLOY.md)); a single-instance lock prevents the
+  classic two-pollers-one-token conflict.
 - **Claude-powered** with a selectable model tier, behind a pluggable provider
-  interface; token usage metered per reply.
-- **Runs without secrets** — with no API key it never auto-sends; placeholder
-  output is escalated to you instead.
+  interface; token usage metered per reply. With no API key it never
+  auto-sends — placeholder output is escalated to you instead.
 
 ## Requirements
 
@@ -91,6 +97,20 @@ python -m app.platform    # manager + one runner per managed bot
 
 For a full walkthrough against a live account, see
 [docs/LIVE_TEST.md](docs/LIVE_TEST.md).
+
+## Owner commands (in your control chat)
+
+| Command | Effect |
+| --- | --- |
+| `/status` | Mode, last-24h activity, spend, muted contacts |
+| `/auto` / `/review` | Automatic replies ↔ approve-every-draft |
+| `/pause` / `/resume` | Stop/start acting (recording continues) |
+| `/mute <name>` / `/unmute <name>` | Never act in one chat |
+| `/digest` | On-demand summary of the last 24h (also sent daily) |
+
+Recommended rollout: `COLLECT_ONLY=true` for a few days → `python -m
+app.backfill` → restart in review mode → `/auto` once you trust it. Full
+deployment recipes (Docker/launchd/systemd): [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ## Configuration
 

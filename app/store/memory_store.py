@@ -11,7 +11,15 @@ import itertools
 import threading
 
 from app.config import settings
-from app.store.models import Connection, Contact, Draft, ManagedBot, Message, Settings
+from app.store.models import (
+    Activity,
+    Connection,
+    Contact,
+    Draft,
+    ManagedBot,
+    Message,
+    Settings,
+)
 
 _draft_counter = itertools.count(1)
 _lock = threading.Lock()
@@ -21,6 +29,8 @@ _drafts: dict[str, Draft] = {}
 _messages: list[Message] = []
 _contacts: dict[tuple[str, int], Contact] = {}
 _managed_bots: dict[int, ManagedBot] = {}
+_activities: list[Activity] = []
+_digest_markers: dict[str, str] = {}
 
 
 # --- Connections -----------------------------------------------------------
@@ -53,6 +63,49 @@ def disable_connection(business_connection_id: str) -> None:
 
 def get_connection(business_connection_id: str) -> Connection | None:
     return _connections.get(business_connection_id)
+
+
+def list_connections(enabled_only: bool = True) -> list[Connection]:
+    conns = list(_connections.values())
+    if enabled_only:
+        conns = [c for c in conns if c.is_enabled]
+    return conns
+
+
+def get_connection_by_owner(owner_user_id: int) -> Connection | None:
+    enabled = [c for c in _connections.values() if c.owner_user_id == owner_user_id]
+    enabled.sort(key=lambda c: c.is_enabled, reverse=True)
+    return enabled[0] if enabled else None
+
+
+def update_connection_settings(
+    business_connection_id: str,
+    *,
+    auto_send: bool | None = None,
+    paused: bool | None = None,
+    tone: str | None = None,
+    tier: str | None = None,
+) -> None:
+    with _lock:
+        conn = _connections.get(business_connection_id)
+        if conn is None:
+            return
+        if auto_send is not None:
+            conn.settings.auto_send = auto_send
+        if paused is not None:
+            conn.settings.paused = paused
+        if tone is not None:
+            conn.settings.tone = tone
+        if tier is not None:
+            conn.settings.tier = tier
+
+
+def get_digest_marker(business_connection_id: str) -> str:
+    return _digest_markers.get(business_connection_id, "")
+
+
+def set_digest_marker(business_connection_id: str, day: str) -> None:
+    _digest_markers[business_connection_id] = day
 
 
 # --- Drafts ----------------------------------------------------------------
@@ -192,6 +245,42 @@ def bump_contact(business_connection_id: str, chat_id: int, name: str | None, ts
 
 def get_contact(business_connection_id: str, chat_id: int) -> Contact | None:
     return _contacts.get((business_connection_id, chat_id))
+
+
+def list_contacts(business_connection_id: str) -> list[Contact]:
+    found = [c for (bc, _), c in _contacts.items() if bc == business_connection_id]
+    return sorted(found, key=lambda c: c.message_count, reverse=True)
+
+
+def set_contact_muted(business_connection_id: str, chat_id: int, muted: bool) -> None:
+    with _lock:
+        contact = _contacts.get((business_connection_id, chat_id))
+        if contact:
+            contact.muted = muted
+
+
+# --- Activity (secretary decisions, for /status and the daily digest) -------
+def record_activity(
+    business_connection_id: str, chat_id: int, kind: str, snippet: str, ts: int
+) -> None:
+    with _lock:
+        _activities.append(
+            Activity(
+                business_connection_id=business_connection_id,
+                chat_id=chat_id,
+                kind=kind,
+                snippet=snippet,
+                ts=ts,
+            )
+        )
+
+
+def activities_since(business_connection_id: str, since_ts: int) -> list[Activity]:
+    return [
+        a
+        for a in _activities
+        if a.business_connection_id == business_connection_id and a.ts >= since_ts
+    ]
 
 
 def update_contact_profile(business_connection_id: str, chat_id: int, profile: str) -> None:

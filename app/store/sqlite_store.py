@@ -14,7 +14,7 @@ import sqlite3
 import threading
 
 from app.config import settings
-from app.store.models import Connection, Contact, Draft, ManagedBot, Message, Settings
+from app.store.models import Activity, Connection, Contact, Draft, ManagedBot, Message, Settings
 
 _lock = threading.Lock()
 _conn: sqlite3.Connection | None = None
@@ -74,9 +74,30 @@ CREATE TABLE IF NOT EXISTS contacts (
     profile                TEXT    NOT NULL DEFAULT '',
     message_count          INTEGER NOT NULL DEFAULT 0,
     updated_at             INTEGER NOT NULL DEFAULT 0,
+    muted                  INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (business_connection_id, chat_id)
 );
+
+-- Secretary decisions, for /status counts and the daily digest.
+CREATE TABLE IF NOT EXISTS activity (
+    id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+    business_connection_id TEXT    NOT NULL,
+    chat_id                INTEGER NOT NULL,
+    kind                   TEXT    NOT NULL,  -- replied | drafted | escalated | silent
+    snippet                TEXT    NOT NULL,
+    ts                     INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_activity_conn_ts
+    ON activity (business_connection_id, ts);
 """
+
+# Columns added after first release: applied to pre-existing databases on
+# connect (CREATE IF NOT EXISTS never alters an existing table).
+_MIGRATIONS = [
+    ("connections", "paused", "INTEGER NOT NULL DEFAULT 0"),
+    ("connections", "digest_last_day", "TEXT NOT NULL DEFAULT ''"),
+    ("contacts", "muted", "INTEGER NOT NULL DEFAULT 0"),
+]
 
 
 def _connect(path: str) -> sqlite3.Connection:
@@ -87,6 +108,11 @@ def _connect(path: str) -> sqlite3.Connection:
     conn = sqlite3.connect(path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.executescript(_SCHEMA)
+    for table, column, decl in _MIGRATIONS:
+        have = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+        if column not in have:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
+    conn.commit()
     return conn
 
 
@@ -115,6 +141,7 @@ def _row_to_connection(row: sqlite3.Row) -> Connection:
             tone=row["tone"],
             tier=row["tier"],
             auto_send=bool(row["auto_send"]),
+            paused=bool(row["paused"]),
             active_hours=(row["active_start"], row["active_end"]),
             allowlist=set(json.loads(row["allowlist"])),
         ),
@@ -197,6 +224,78 @@ def get_connection(business_connection_id: str) -> Connection | None:
         .fetchone()
     )
     return _row_to_connection(row) if row else None
+
+
+def list_connections(enabled_only: bool = True) -> list[Connection]:
+    sql = "SELECT * FROM connections"
+    if enabled_only:
+        sql += " WHERE is_enabled = 1"
+    return [_row_to_connection(r) for r in _c().execute(sql).fetchall()]
+
+
+def get_connection_by_owner(owner_user_id: int) -> Connection | None:
+    """The owner's active connection (for control-chat commands)."""
+    row = (
+        _c()
+        .execute(
+            "SELECT * FROM connections WHERE owner_user_id = ? ORDER BY is_enabled DESC LIMIT 1",
+            (owner_user_id,),
+        )
+        .fetchone()
+    )
+    return _row_to_connection(row) if row else None
+
+
+def update_connection_settings(
+    business_connection_id: str,
+    *,
+    auto_send: bool | None = None,
+    paused: bool | None = None,
+    tone: str | None = None,
+    tier: str | None = None,
+) -> None:
+    """Apply owner-command changes to a connection's settings."""
+    sets, args = [], []
+    for column, value in (
+        ("auto_send", None if auto_send is None else int(auto_send)),
+        ("paused", None if paused is None else int(paused)),
+        ("tone", tone),
+        ("tier", tier),
+    ):
+        if value is not None:
+            sets.append(f"{column} = ?")
+            args.append(value)
+    if not sets:
+        return
+    with _lock:
+        conn = _c()
+        conn.execute(
+            f"UPDATE connections SET {', '.join(sets)} WHERE business_connection_id = ?",
+            (*args, business_connection_id),
+        )
+        conn.commit()
+
+
+def get_digest_marker(business_connection_id: str) -> str:
+    row = (
+        _c()
+        .execute(
+            "SELECT digest_last_day FROM connections WHERE business_connection_id = ?",
+            (business_connection_id,),
+        )
+        .fetchone()
+    )
+    return row["digest_last_day"] if row else ""
+
+
+def set_digest_marker(business_connection_id: str, day: str) -> None:
+    with _lock:
+        conn = _c()
+        conn.execute(
+            "UPDATE connections SET digest_last_day = ? WHERE business_connection_id = ?",
+            (day, business_connection_id),
+        )
+        conn.commit()
 
 
 # --- Drafts ----------------------------------------------------------------
@@ -383,6 +482,75 @@ def bump_contact(business_connection_id: str, chat_id: int, name: str | None, ts
     return got
 
 
+def list_contacts(business_connection_id: str) -> list[Contact]:
+    rows = (
+        _c()
+        .execute(
+            "SELECT * FROM contacts WHERE business_connection_id = ? ORDER BY message_count DESC",
+            (business_connection_id,),
+        )
+        .fetchall()
+    )
+    return [_row_to_contact(r) for r in rows]
+
+
+def set_contact_muted(business_connection_id: str, chat_id: int, muted: bool) -> None:
+    with _lock:
+        conn = _c()
+        conn.execute(
+            "UPDATE contacts SET muted = ? WHERE business_connection_id = ? AND chat_id = ?",
+            (int(muted), business_connection_id, chat_id),
+        )
+        conn.commit()
+
+
+# --- Activity (secretary decisions, for /status and the daily digest) -------
+def record_activity(
+    business_connection_id: str, chat_id: int, kind: str, snippet: str, ts: int
+) -> None:
+    with _lock:
+        conn = _c()
+        conn.execute(
+            "INSERT INTO activity (business_connection_id, chat_id, kind, snippet, ts) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (business_connection_id, chat_id, kind, snippet, ts),
+        )
+        conn.commit()
+
+
+def activities_since(business_connection_id: str, since_ts: int) -> list[Activity]:
+    rows = (
+        _c()
+        .execute(
+            "SELECT * FROM activity WHERE business_connection_id = ? AND ts >= ? ORDER BY id",
+            (business_connection_id, since_ts),
+        )
+        .fetchall()
+    )
+    return [
+        Activity(
+            business_connection_id=r["business_connection_id"],
+            chat_id=r["chat_id"],
+            kind=r["kind"],
+            snippet=r["snippet"],
+            ts=r["ts"],
+        )
+        for r in rows
+    ]
+
+
+def _row_to_contact(row: sqlite3.Row) -> Contact:
+    return Contact(
+        business_connection_id=row["business_connection_id"],
+        chat_id=row["chat_id"],
+        name=row["name"],
+        profile=row["profile"],
+        message_count=row["message_count"],
+        updated_at=row["updated_at"],
+        muted=bool(row["muted"]),
+    )
+
+
 def get_contact(business_connection_id: str, chat_id: int) -> Contact | None:
     row = (
         _c()
@@ -392,16 +560,7 @@ def get_contact(business_connection_id: str, chat_id: int) -> Contact | None:
         )
         .fetchone()
     )
-    if row is None:
-        return None
-    return Contact(
-        business_connection_id=row["business_connection_id"],
-        chat_id=row["chat_id"],
-        name=row["name"],
-        profile=row["profile"],
-        message_count=row["message_count"],
-        updated_at=row["updated_at"],
-    )
+    return _row_to_contact(row) if row else None
 
 
 def update_contact_profile(business_connection_id: str, chat_id: int, profile: str) -> None:

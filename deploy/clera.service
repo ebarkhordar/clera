@@ -1,0 +1,24 @@
+# systemd unit for Clera on Linux: survives reboots, restarts on crash.
+#
+# Install (adjust paths/user first):
+#   sudo cp deploy/clera.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now clera
+#
+# Logs: journalctl -u clera -f
+
+[Unit]
+Description=Clera Telegram secretary
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=clera
+WorkingDirectory=/opt/clera
+ExecStart=/opt/clera/.venv/bin/python -m app.main
+Restart=always
+RestartSec=15
+
+[Install]
+WantedBy=multi-user.target

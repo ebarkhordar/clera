@@ -48,6 +48,8 @@ def is_stale(message_ts: int, now_ts: int, max_age_s: int) -> bool:
 def decide(conn: Connection, sender_user_id: int | None, local_hour: int) -> PolicyOutcome:
     if not conn.is_enabled:
         return PolicyOutcome(Decision.IGNORE, "connection disabled")
+    if conn.settings.paused:
+        return PolicyOutcome(Decision.IGNORE, "paused by owner")
     if not conn.can_reply:
         return PolicyOutcome(Decision.IGNORE, "no reply permission on connection")
 

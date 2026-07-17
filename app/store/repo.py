@@ -17,6 +17,15 @@ else:
 upsert_connection = _impl.upsert_connection
 disable_connection = _impl.disable_connection
 get_connection = _impl.get_connection
+get_connection_by_owner = _impl.get_connection_by_owner
+list_connections = _impl.list_connections
+update_connection_settings = _impl.update_connection_settings
+get_digest_marker = _impl.get_digest_marker
+set_digest_marker = _impl.set_digest_marker
+list_contacts = _impl.list_contacts
+set_contact_muted = _impl.set_contact_muted
+record_activity = _impl.record_activity
+activities_since = _impl.activities_since
 create_draft = _impl.create_draft
 get_draft = _impl.get_draft
 set_draft_status = _impl.set_draft_status

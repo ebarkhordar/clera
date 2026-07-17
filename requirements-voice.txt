@@ -1,0 +1,5 @@
+# Local voice-note transcription — Apple Silicon only (mlx).
+# On Linux/Docker, skip this file; voice notes are recorded without transcript.
+mlx-whisper>=0.4
+soundfile>=0.12
+scipy>=1.11
