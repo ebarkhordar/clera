@@ -87,12 +87,17 @@ async def on_business_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     if msg is None:
         return
     text = msg.text
+    unheard_voice = False
     if not text and msg.voice is not None:
         transcript = await _voice_to_text(context, msg)
         if transcript is None:
+            # No transcription backend (e.g. Linux server) or it failed. The
+            # message must still enter history — losing it silently is worse.
             log.warning("Voice message in chat %s could not be transcribed", msg.chat.id)
-            return
-        text = f"[voice] {transcript}"
+            text = "[voice] (no transcript available)"
+            unheard_voice = True
+        else:
+            text = f"[voice] {transcript}"
     elif not text and msg.photo:
         # Record photos so the secretary isn't blind to them: description when
         # vision is available (and we're allowed to call an LLM), caption always.
@@ -163,6 +168,22 @@ async def on_business_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     # late; the owner has usually handled those already. History only, no reply.
     if is_stale(ts, int(time.time()), settings.stale_after_seconds):
         log.info("Message on %s chat %s is stale (backlog); recorded, not replying", bc_id, chat_id)
+        return
+
+    # A fresh voice note we couldn't hear can't be answered — hand it to the
+    # owner instead of letting the model reply to unknown content.
+    if unheard_voice:
+        await context.bot.send_message(
+            chat_id=_control_chat(conn.owner_user_id),
+            text=(
+                f"🎙 *{contact.name or 'A contact'}* sent a voice note I couldn't "
+                "transcribe — please listen and answer it yourself."
+            ),
+            parse_mode="Markdown",
+        )
+        store.record_activity(
+            bc_id, chat_id, "escalated", f"{contact.name or chat_id}: voice (no transcript)", ts
+        )
         return
 
     local_hour = msg.date.hour if msg.date else 12

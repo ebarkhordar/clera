@@ -1,0 +1,17 @@
+# One-command always-on deployment for any Linux host:
+#
+#   docker compose up -d
+#
+# Survives crashes and host reboots (restart: unless-stopped + Docker's
+# systemd service). Put secrets in .env next to this file.
+services:
+  clera:
+    build: .
+    container_name: clera
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - clera-data:/clera/data
+
+volumes:
+  clera-data:
