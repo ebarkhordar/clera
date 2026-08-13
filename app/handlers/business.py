@@ -94,7 +94,7 @@ async def on_business_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             # No transcription backend (e.g. Linux server) or it failed. The
             # message must still enter history — losing it silently is worse.
             log.warning("Voice message in chat %s could not be transcribed", msg.chat.id)
-            text = "[voice] (no transcript available)"
+            text = "[voice] (audio archived, no transcript yet)"
             unheard_voice = True
         else:
             text = f"[voice] {transcript}"
@@ -263,12 +263,27 @@ async def on_business_message(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 async def _voice_to_text(context, msg) -> str | None:
-    """Download a Telegram voice note and transcribe it locally. None on failure."""
+    """Download a Telegram voice note and transcribe it locally. None on failure.
+
+    On hosts without a transcription backend (e.g. Linux servers — mlx-whisper
+    is Apple-Silicon-only) the audio is archived to ``data/voices/`` so the
+    content stays recoverable and can be transcribed later.
+    """
     from app.agent import transcribe
 
-    if not transcribe.available():
-        return None
     tg_file = await context.bot.get_file(msg.voice.file_id)
+
+    if not transcribe.available():
+        archive_dir = os.path.join(os.path.dirname(settings.sqlite_path) or ".", "voices")
+        os.makedirs(archive_dir, exist_ok=True)
+        path = os.path.join(archive_dir, f"{msg.chat.id}_{msg.message_id}.oga")
+        try:
+            await tg_file.download_to_drive(custom_path=path)
+            log.info("No transcriber on this host; archived voice note to %s", path)
+        except Exception:
+            log.exception("Could not archive voice note for chat %s", msg.chat.id)
+        return None
+
     fd, path = tempfile.mkstemp(suffix=".oga")
     os.close(fd)
     try:
