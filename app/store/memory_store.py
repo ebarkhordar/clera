@@ -172,6 +172,16 @@ def record_message(
         )
 
 
+def has_message(business_connection_id: str, chat_id: int, ts: int, text: str) -> bool:
+    return any(
+        m.business_connection_id == business_connection_id
+        and m.chat_id == chat_id
+        and m.ts == ts
+        and m.text == text
+        for m in _messages
+    )
+
+
 def recent_messages(business_connection_id: str, chat_id: int, limit: int) -> list[Message]:
     thread = [
         m

@@ -100,13 +100,17 @@ A full walkthrough against a live account is in [docs/LIVE_TEST.md](docs/LIVE_TE
 
 Trust is earned in stages; each stage is one command.
 
-1. **Collect** — run with `COLLECT_ONLY=true` for a few days. Clera records every covered
+1. **Import your history** *(optional but transformative)* — export your chats from
+   Telegram Desktop (*Settings → Advanced → Export Telegram data*, JSON) and run
+   `python -m app.import_export result.json`. Years of conversations become the
+   secretary's memory in one shot; re-running is safe (duplicates are skipped).
+2. **Collect** — run with `COLLECT_ONLY=true` for a few days. Clera records every covered
    message (voice included) and does nothing else: no LLM calls, no replies, no cost.
-2. **Backfill** — `python -m app.backfill` builds a profile for every contact from the
+3. **Backfill** — `python -m app.backfill` builds a profile for every contact from the
    collected history, so the secretary starts each thread fully informed.
-3. **Review** — restart without the flag. Every proposed reply arrives in your control chat
+4. **Review** — restart without the flag. Every proposed reply arrives in your control chat
    with **Send / Discard** buttons; nothing goes out without your tap.
-4. **Automatic** — when the drafts consistently sound like you, send `/auto`. From then on
+5. **Automatic** — when the drafts consistently sound like you, send `/auto`. From then on
    replies go out on their own, escalations come to you, and the daily digest shows you
    everything it did. `/review` or `/pause` at any time.
 

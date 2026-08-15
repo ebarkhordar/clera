@@ -1,7 +1,39 @@
 """Tests for transcript/prompt construction (language- and label-agnostic)."""
 
-from app.agent.prompts import build_draft_system, format_transcript
+from app.agent.prompts import (
+    build_draft_system,
+    format_exemplars,
+    format_transcript,
+    mine_exemplars,
+)
 from app.store.models import Message
+
+
+def test_mine_exemplars_pairs_in_then_out():
+    history = [
+        Message("bc", 1, "in", 1, "سلام", 0),
+        Message("bc", 1, "out", 2, "سلام عزیزم", 0),
+        Message("bc", 1, "out", 2, "چطوری؟", 0),
+        Message("bc", 1, "in", 1, "خوبم", 0),
+    ]
+    assert mine_exemplars(history) == [("سلام", "سلام عزیزم")]
+
+
+def test_mine_exemplars_samples_across_long_history():
+    history = []
+    for i in range(40):
+        history.append(Message("bc", 1, "in", 1, f"q{i}", 0))
+        history.append(Message("bc", 1, "out", 2, f"a{i}", 0))
+    pairs = mine_exemplars(history, max_pairs=6)
+    assert len(pairs) == 6
+    assert pairs[0] == ("q0", "a0")  # oldest voice represented
+    assert int(pairs[-1][0][1:]) > 30  # ...and recent voice too
+
+
+def test_exemplars_render_into_system_prompt():
+    system = build_draft_system("friendly", "profile", [("hi", "hey!")])
+    assert 'They said: "hi" → Owner replied: "hey!"' in system
+    assert format_exemplars([]) == ""
 
 
 def _msg(direction: str, text: str) -> Message:

@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     # Memory
     history_limit: int = 20  # messages of thread history included in a draft
     profile_refresh_every: int = 6  # rebuild a contact's profile every N messages
+    # Style exemplars: real (contact → owner) pairs mined from a longer window
+    # of the thread and shown to the model as voice ground truth.
+    exemplar_history_limit: int = 200
+    exemplar_pairs: int = 6
 
     # Collect-only mode: record every message (voice notes transcribed locally)
     # into history, but never call the LLM and never draft, reply, or escalate.

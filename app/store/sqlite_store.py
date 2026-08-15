@@ -369,6 +369,20 @@ def record_message(
         conn.commit()
 
 
+def has_message(business_connection_id: str, chat_id: int, ts: int, text: str) -> bool:
+    """Dedup check for imports: is this exact message already recorded?"""
+    row = (
+        _c()
+        .execute(
+            "SELECT 1 FROM messages WHERE business_connection_id = ? AND chat_id = ? "
+            "AND ts = ? AND text = ? LIMIT 1",
+            (business_connection_id, chat_id, ts, text),
+        )
+        .fetchone()
+    )
+    return row is not None
+
+
 def recent_messages(business_connection_id: str, chat_id: int, limit: int) -> list[Message]:
     """Return up to `limit` most recent messages for a thread, oldest first."""
     rows = (

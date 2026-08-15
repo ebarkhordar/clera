@@ -193,6 +193,7 @@ async def on_business_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     history = store.recent_messages(bc_id, chat_id, settings.history_limit)
+    exemplar_history = store.recent_messages(bc_id, chat_id, settings.exemplar_history_limit)
     result = await asyncio.to_thread(
         draft_reply,
         history=history,
@@ -200,6 +201,7 @@ async def on_business_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         profile=contact.profile,
         tone=conn.settings.tone,
         tier=conn.settings.tier,
+        exemplar_history=exemplar_history,
     )
     store.record_spend(bc_id, result.cost_usd)
 

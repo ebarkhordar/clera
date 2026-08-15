@@ -23,6 +23,7 @@ reply in Persian; do not switch to English.
 
 What you know about this contact:
 {profile}
+{exemplars}
 
 Rules:
 - Use the conversation history for context; stay consistent with what the owner \
@@ -74,10 +75,41 @@ def format_transcript(history: list[Message], contact_name: str | None) -> str:
     return "\n".join(f"{_label(m.direction, contact_name)}: {m.text}" for m in history)
 
 
-def build_draft_system(tone: str, profile: str) -> str:
+def mine_exemplars(history: list[Message], max_pairs: int = 6) -> list[tuple[str, str]]:
+    """Real (contact → owner) exchange pairs, sampled across the thread.
+
+    These are the strongest style signal we have — the owner's *actual* replies
+    to this contact. Adjacent in→out pairs are collected and sampled evenly so
+    both older and recent voice is represented.
+    """
+    pairs = [
+        (prev.text, nxt.text)
+        for prev, nxt in zip(history, history[1:])
+        if prev.direction == "in" and nxt.direction == "out"
+    ]
+    if len(pairs) <= max_pairs:
+        return pairs
+    step = len(pairs) / max_pairs
+    return [pairs[int(i * step)] for i in range(max_pairs)]
+
+
+def format_exemplars(pairs: list[tuple[str, str]]) -> str:
+    if not pairs:
+        return ""
+    lines = ["\nHow the owner has actually replied to this contact before:"]
+    for them, me in pairs:
+        lines.append(f'- They said: "{them}" → Owner replied: "{me}"')
+    lines.append("Match this register — these are ground truth for the owner's voice.")
+    return "\n".join(lines)
+
+
+def build_draft_system(
+    tone: str, profile: str, exemplars: list[tuple[str, str]] | None = None
+) -> str:
     return _DRAFT_SYSTEM.format(
         tone=tone,
         profile=profile.strip() or "Nothing yet — infer what you can from the conversation.",
+        exemplars=format_exemplars(exemplars or []),
     )
 
 

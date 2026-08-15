@@ -31,6 +31,7 @@ get_draft = _impl.get_draft
 set_draft_status = _impl.set_draft_status
 record_spend = _impl.record_spend
 record_message = _impl.record_message
+has_message = _impl.has_message
 upsert_managed_bot = _impl.upsert_managed_bot
 get_managed_bot = _impl.get_managed_bot
 list_managed_bots = _impl.list_managed_bots

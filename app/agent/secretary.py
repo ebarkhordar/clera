@@ -10,6 +10,7 @@ from app.agent.prompts import (
     build_summary_system,
     build_summary_user,
     format_transcript,
+    mine_exemplars,
 )
 from app.agent.providers.anthropic_provider import AnthropicProvider
 from app.agent.providers.base import Completion, Provider
@@ -77,14 +78,21 @@ def draft_reply(
     profile: str,
     tone: str,
     tier: str,
+    exemplar_history: list[Message] | None = None,
 ) -> DraftResult:
-    """Draft a reply that reads as the owner, using thread history + contact profile."""
+    """Draft a reply that reads as the owner, using thread history + contact profile.
+
+    ``exemplar_history`` is a longer window of the same thread used only to mine
+    real (contact → owner) exchange pairs as style ground truth; it falls back
+    to ``history`` when not provided.
+    """
     model = settings.model_for_tier(tier)
     provider = _select_provider()
 
     transcript = format_transcript(history, contact_name)
+    exemplars = mine_exemplars(exemplar_history or history, settings.exemplar_pairs)
     completion = provider.complete(
-        system=build_draft_system(tone, profile),
+        system=build_draft_system(tone, profile, exemplars),
         user=build_draft_user(transcript),
         model=model,
     )
