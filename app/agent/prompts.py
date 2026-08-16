@@ -84,7 +84,7 @@ def mine_exemplars(history: list[Message], max_pairs: int = 6) -> list[tuple[str
     """
     pairs = [
         (prev.text, nxt.text)
-        for prev, nxt in zip(history, history[1:])
+        for prev, nxt in zip(history, history[1:], strict=False)
         if prev.direction == "in" and nxt.direction == "out"
     ]
     if len(pairs) <= max_pairs:

@@ -81,10 +81,9 @@ def message_row(message: dict, owner_id: int) -> tuple[str, int, int] | None:
 
 
 def iter_personal_chats(data: dict) -> list[dict]:
-    if "chats" in data:  # full-account export
-        chats = data.get("chats", {}).get("list", [])
-    else:  # single-chat export
-        chats = [data]
+    # Full-account exports nest chats under "chats.list"; a single-chat export
+    # is itself the chat object.
+    chats = data.get("chats", {}).get("list", []) if "chats" in data else [data]
     return [c for c in chats if c.get("type") in ("personal_chat", "private")]
 
 
