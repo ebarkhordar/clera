@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="470" viewBox="0 0 860 470" role="img" aria-label="python -m app.demo — terminal session">
+  <rect width="860" height="470" rx="12" fill="#14181d"/>
+  <rect x="0.5" y="0.5" width="859" height="469" rx="12" fill="none" stroke="#2a323b"/>
+
+  <!-- title bar -->
+  <circle cx="26" cy="24" r="6.5" fill="#ff5f57"/>
+  <circle cx="48" cy="24" r="6.5" fill="#febc2e"/>
+  <circle cx="70" cy="24" r="6.5" fill="#28c840"/>
+  <text x="430" y="29" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="14" fill="#6b7683">python -m app.demo</text>
+  <line x1="0" y1="44" x2="860" y2="44" stroke="#2a323b"/>
+
+  <g font-family="ui-monospace, Menlo, monospace" font-size="15.5">
+    <text x="32" y="82" fill="#e8edf2" font-weight="bold">Clera demo</text>
+    <text x="129" y="82" fill="#98a4b0"> — you are Sam, messaging the owner's phone.</text>
+
+    <text x="32" y="122" fill="#6fa8dc" font-weight="bold">Sam:</text>
+    <text x="82" y="122" fill="#e8edf2">hey! wanna come to the bbq saturday?</text>
+    <text x="52" y="150" fill="#7ee2a8" font-weight="bold">You (via Clera):</text>
+    <text x="212" y="150" fill="#e8edf2">yeah sounds good! what time and where?</text>
+    <text x="52" y="174" fill="#525d68">model=claude-haiku · est. cost $0.0204</text>
+
+    <text x="32" y="218" fill="#6fa8dc" font-weight="bold">Sam:</text>
+    <text x="82" y="218" fill="#e8edf2">also could you send me the 50 bucks from last time? 😅</text>
+    <text x="52" y="246" fill="#f0c05e">👋 escalated to the owner (nothing sent to Sam):</text>
+    <text x="52" y="272" fill="#f0c05e">“Sam is asking for $50 — you need to decide how to reply.”</text>
+
+    <text x="32" y="316" fill="#6fa8dc" font-weight="bold">Sam:</text>
+    <text x="82" y="316" fill="#e8edf2">ok cool, see you saturday!</text>
+    <text x="52" y="344" fill="#525d68">🤫 Clera stays silent — no reply needed.</text>
+
+    <text x="32" y="396" fill="#525d68">The three-way decision protocol: reply in your voice, stay silent,</text>
+    <text x="32" y="420" fill="#525d68">or refuse to guess and hand it to the real you.</text>
+  </g>
+</svg>

@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="300" viewBox="0 0 1280 300" role="img" aria-label="Clera — an AI secretary for your personal Telegram">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#101820"/>
+      <stop offset="1" stop-color="#16222e"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="300" rx="16" fill="url(#bg)"/>
+  <rect x="0.5" y="0.5" width="1279" height="299" rx="16" fill="none" stroke="#2c3e50" stroke-width="1"/>
+
+  <!-- wordmark -->
+  <text x="80" y="128" font-family="-apple-system, 'Segoe UI', sans-serif" font-size="72" font-weight="800" fill="#f2f5f8" letter-spacing="-1">Clera</text>
+  <text x="82" y="172" font-family="-apple-system, 'Segoe UI', sans-serif" font-size="24" fill="#9db4c8">Your Telegram answers itself — except when it shouldn't.</text>
+  <text x="82" y="208" font-family="-apple-system, 'Segoe UI', sans-serif" font-size="17" fill="#5f7284">An open-source AI secretary for your personal chats, built on the official Business API.</text>
+
+  <!-- decision chips -->
+  <g font-family="ui-monospace, Menlo, monospace" font-size="17">
+    <rect x="840" y="78" width="360" height="44" rx="10" fill="#12261a" stroke="#1f5c38"/>
+    <text x="862" y="106" fill="#7ee2a8">↩ replies in your voice</text>
+
+    <rect x="840" y="130" width="360" height="44" rx="10" fill="#1a2027" stroke="#39434d"/>
+    <text x="862" y="158" fill="#8c9baa">· stays silent when done</text>
+
+    <rect x="840" y="182" width="360" height="44" rx="10" fill="#2b2113" stroke="#6b4e1d"/>
+    <text x="862" y="210" fill="#f0c05e">! escalates money to you</text>
+  </g>
+</svg>
